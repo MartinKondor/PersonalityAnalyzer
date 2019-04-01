@@ -1,2 +1,3 @@
 # PersonalityAnalyzer
+
 Personality analyzer AI
