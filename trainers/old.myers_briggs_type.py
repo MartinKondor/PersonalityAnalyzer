@@ -13,7 +13,7 @@ from tools import *
 
 # loading the dataset
 N = 3500  # number of elements to use from the dataset, because of high ram usage  
-df = pd.read_csv('datasets/mbti-myers-briggs-personality-type-dataset/mbti_1.csv')[:N]
+df = pd.read_csv('data/mbti-myers-briggs-personality-type-dataset/mbti_1.csv')[:N]
 
 
 # preprocessing
