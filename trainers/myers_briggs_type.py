@@ -3,98 +3,97 @@ import sys
 
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import OneHotEncoder
+import tqdm
 from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import OneHotEncoder
 
 sys.path.append('..')  # Adding the upper directory to the python path
 import utils
 
 
+CLASS_LIMIT = 250  # The number of measurements (posts) to choose from each classes
+class_counter = {}
 df = pd.read_csv('../data/mbti_1.csv')
 X, y = [], []
 
-print('Spliting posts')
-for xi, yi in zip(df['posts'].values, df['type'].values):
+
+for xi, yi in tqdm.tqdm(zip(df['posts'].values, df['type'].values)):
     posts = xi.split('|||')
-    X.extend(posts)
     
+    if yi in class_counter:
+        if class_counter[yi] > CLASS_LIMIT:
+            continue
+        else:
+            class_counter[yi] += len(posts)
+    else:
+        class_counter[yi] = len(posts)
+        
+    posts = [utils.prepare(p) for p in posts]
+    X.extend(posts)
+
     for _ in range(len(posts)):
         y.append(yi)
 
-del df
-classes = {}
+del xi, yi, df, posts, _
+X, y = np.array(X), np.array(y)
 
-print('Count classes')
-for c in y:
-    if c in classes.keys():
-        classes[c] += 1
-    else:
-        classes[c] = 0
+print(len(X), 'post')
+print(len(np.unique(y)), 'classes')
+print('Number of posts for each class:')
 
-        
-print('Set a limit for each class')
-class_limit = 2000
-class_counter = {k: 0 for k in classes.keys()}
-del classes
+for class_name in class_counter:
+    print(class_name, '\t', class_counter[class_name])
 
-X_new, y_new = [], []
+del class_name, class_counter, CLASS_LIMIT
 
-for xi, yi in zip(X, y):
-    if class_counter[yi] > class_limit:
-        continue
-
-    class_counter[yi] += 1
-    X_new.append(xi)
-    y_new.append(yi)
+print()
+print('Example:')
+print(X[-1])
+print('Is:', y[-1])
+print()
     
-    
-print('Swap variables')
-del X, y, class_limit, class_counter
-X_new, y_new = np.array(X_new), np.array(y_new)
+X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=True, test_size=.1)
+del X, y
 
-print('Encode y values')
-class_encoder = OneHotEncoder()
-y_encoded = class_encoder.fit_transform(y_new.reshape(-1, 1)).toarray()
-del y_new
-
-print('Data selection')
-gc.collect()
-X_train, X_test, y_train, y_test = train_test_split(X_new, y_encoded, test_size=.1)
-del X_new, y_encoded
-
-print('Preprocess X values')
-vectorizer = utils.StemmedTfidfVectorizer(min_df=1, stop_words='english')
+vectorizer = TfidfVectorizer()
 X_train = vectorizer.fit_transform(X_train).toarray()
 X_test = vectorizer.transform(X_test).toarray()
+# del vectorizer
 
-del np, pd, OneHotEncoder, train_test_split, utils
+encoder = OneHotEncoder()
+y_train = encoder.fit_transform(y_train[:, np.newaxis]).toarray()
+y_test = encoder.transform(y_test[:, np.newaxis]).toarray()
+# del encoder
+
+del pd, tqdm, train_test_split, TfidfVectorizer, OneHotEncoder, utils
 gc.collect()
 
-# Variables in memory here: X_train, X_test, y_train, y_test, vectorizer, class_encoder
-print('Build model')
+print('Building and training the model ...')
 from keras.models import Sequential
 from keras.layers import Dense
 
 
 model = Sequential()
-model.add(Dense(250, activation='relu'))
-model.add(Dense(16, activation='softmax'))
+model.add(Dense(100, activation='relu'))
+model.add(Dense(16, activation='relu'))
 model.compile(loss='mean_squared_error', optimizer='adam')
 
-print('Train model')
-history = model.fit(x=X_train, y=y_train, verbose=1, epochs=1, shuffle=True)
+history = model.fit(x=X_train, y=y_train, verbose=1, epochs=20, shuffle=True)
+print()
 
-print('Save model and preprocessors')
-from sklearn.externals import joblib
-model.save('../trained/new/model.h5')
-joblib.dump(class_encoder, '../trained/new/class_encoder.pkl')
-joblib.dump(vectorizer, '../trained/new/vectorizer.pkl')
-
-print('Test model')
 train_score = model.evaluate(X_train, y_train, verbose=1)
-print('Train score', train_score)
+print('Train score:', train_score)
 test_score = model.evaluate(X_test, y_test, verbose=1)
-print('Test score', test_score)
+print('Test score:', test_score)
 
+pred = model.predict(X_test[:1])[0]
+pred[np.argmax(pred)] = 1
+pred[pred != 1] = 0
+pred = np.array(pred, dtype=np.uint8)
 
-print('Done.')
+print()
+print('Testing:')
+print('Post:\n', vectorizer.inverse_transform(X_test[:1]))
+print('Prediction:\n', encoder.inverse_transform([pred])[0][0])
+print('Real:\n', encoder.inverse_transform(y_test[:1])[0][0])
