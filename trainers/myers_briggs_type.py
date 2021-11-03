@@ -9,7 +9,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import OneHotEncoder
 
 sys.path.append('..')  # Adding the upper directory to the python path
-import utils
+import tools as utils
 
 
 CLASS_LIMIT = 250  # The number of measurements (posts) to choose from each classes
@@ -34,6 +34,7 @@ for xi, yi in tqdm.tqdm(zip(df['posts'].values, df['type'].values)):
 
     for _ in range(len(posts)):
         y.append(yi)
+
 
 del xi, yi, df, posts, _
 X, y = np.array(X), np.array(y)
